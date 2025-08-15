@@ -2,40 +2,52 @@ import 'package:flutter/material.dart';
 import '../models/weather_model.dart';
 
 class WeatherCard extends StatelessWidget {
-  final WeatherModel data;
-  const WeatherCard({super.key, required this.data});
+  final WeatherModel weather;
+  final VoidCallback onTap;
+
+  const WeatherCard({
+    super.key,
+    required this.weather,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: ListTile(
-        leading: Icon(_getIcon(data.condition, data.isDay), size: 32),
-        title: Text(
-          data.city,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 3,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              const Icon(Icons.wb_sunny, size: 40, color: Colors.orange),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      weather.city,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(weather.description),
+                  ],
+                ),
+              ),
+              Text(
+                "${weather.temperature.toStringAsFixed(1)}°C",
+                style: const TextStyle(fontSize: 20),
+              ),
+            ],
+          ),
         ),
-        subtitle: Text(
-          '${data.temperature}° • ${data.condition.capitalize()}',
-        ),
-        trailing: Text('${data.high}° / ${data.low}°'),
       ),
     );
   }
-
-  IconData _getIcon(String condition, bool isDay) {
-    final lc = condition.toLowerCase();
-    if (lc.contains('hujan')) return Icons.beach_access;
-    if (lc.contains('awan')) return Icons.cloud;
-    if (lc.contains('cerah') || lc.contains('clear')) {
-      return isDay ? Icons.wb_sunny : Icons.nights_stay;
-    }
-    return Icons.wb_cloudy;
-  }
-}
-
-extension StringCasing on String {
-  String capitalize() => isEmpty
-      ? ''
-      : '${this[0].toUpperCase()}${substring(1)}';
 }

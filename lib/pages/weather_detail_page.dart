@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/weather_model.dart';
 import '../models/forecast_model.dart';
@@ -61,6 +62,10 @@ class _WeatherDetailPageState extends State<WeatherDetailPage> {
     setState(() => isFavorite = !isFavorite);
   }
 
+  String _formatDay(DateTime dt) {
+    return DateFormat('EEE, d MMM', 'id_ID').format(dt);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -81,7 +86,7 @@ class _WeatherDetailPageState extends State<WeatherDetailPage> {
                   padding: const EdgeInsets.all(16),
                   children: [
                     Text(
-                      "${widget.weather.temp.toStringAsFixed(1)}°C",
+                      "${widget.weather.temperature.toStringAsFixed(1)}°C",
                       style: const TextStyle(
                           fontSize: 48, fontWeight: FontWeight.bold),
                       textAlign: TextAlign.center,
@@ -94,7 +99,6 @@ class _WeatherDetailPageState extends State<WeatherDetailPage> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Info Cuaca 2 kolom per baris
                     Wrap(
                       spacing: 16,
                       runSpacing: 16,
@@ -102,7 +106,7 @@ class _WeatherDetailPageState extends State<WeatherDetailPage> {
                         _buildInfoTile(
                             "Kelembapan", "${widget.weather.humidity}%"),
                         _buildInfoTile(
-                            "Arah Angin", widget.weather.windDirection ?? "-"),
+                            "Arah Angin", widget.weather.windDirection),
                         _buildInfoTile(
                             "Tekanan", "${widget.weather.pressure} hPa"),
                         _buildInfoTile(
@@ -119,10 +123,10 @@ class _WeatherDetailPageState extends State<WeatherDetailPage> {
                     ),
                     const SizedBox(height: 8),
                     ...forecast!.daily.map((day) => ListTile(
-                          title: Text(day.date as String),
-                          subtitle: Text(day.description()),
-                          trailing:
-                              Text("${day.temp.toStringAsFixed(1)}°C"),
+                          title: Text(_formatDay(day.date)),
+                          subtitle: Text(day.condition),
+                          trailing: Text(
+                              "${day.maxTemp.toStringAsFixed(0)}° / ${day.minTemp.toStringAsFixed(0)}°"),
                         )),
                   ],
                 ),

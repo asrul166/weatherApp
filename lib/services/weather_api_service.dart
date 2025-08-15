@@ -1,98 +1,94 @@
-// lib/services/weather_api_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:geolocator/geolocator.dart';
 import '../models/weather_model.dart';
 import '../models/forecast_model.dart';
 
 class WeatherApiService {
-  final String apiKey = '5f33107b99b28feb78327ac8a67f8b7d';
+  static const String _apiKey = "5f33107b99b28feb78327ac8a67f8b7d";
+  static const String _baseUrl = "https://api.weatherapi.com/v1";
 
-  /// Ambil cuaca saat ini berdasarkan nama kota
   Future<WeatherModel> fetchCurrentWeather(String city) async {
-    final url =
-        'https://api.openweathermap.org/data/2.5/weather?q=$city&units=metric&lang=id&appid=$apiKey';
+    final url = Uri.parse("$_baseUrl/forecast.json?key=$_apiKey&q=$city&days=1&aqi=no&alerts=no");
+    final response = await http.get(url);
 
-    final res = await http.get(Uri.parse(url));
-    if (res.statusCode == 200) {
-      final data = json.decode(res.body);
-      return WeatherModel.fromJson(data);
-    } else {
-      throw Exception('Gagal ambil cuaca untuk kota: $city');
+    if (response.statusCode != 200) {
+      throw Exception("Gagal mengambil data cuaca");
     }
+
+    final data = jsonDecode(response.body);
+    return _mapToWeatherModel(data);
   }
 
-  /// Ambil cuaca berdasarkan lokasi device
-  Future<WeatherModel> fetchWeatherByLocation() async {
-    final position = await _determinePosition();
-    final url =
-        'https://api.openweathermap.org/data/2.5/weather?lat=${position.latitude}&lon=${position.longitude}&units=metric&lang=id&appid=$apiKey';
+  Future<WeatherModel> fetchCurrentWeatherByCoords(double lat, double lon) async {
+    final url = Uri.parse("$_baseUrl/forecast.json?key=$_apiKey&q=$lat,$lon&days=1&aqi=no&alerts=no");
+    final response = await http.get(url);
 
-    final res = await http.get(Uri.parse(url));
-    if (res.statusCode == 200) {
-      final data = json.decode(res.body);
-      return WeatherModel.fromJson(data);
-    } else {
-      throw Exception('Gagal ambil cuaca berdasarkan lokasi');
+    if (response.statusCode != 200) {
+      throw Exception("Gagal mengambil data cuaca berdasarkan koordinat");
     }
+
+    final data = jsonDecode(response.body);
+    return _mapToWeatherModel(data);
   }
 
-  /// Cari kota (autocomplete)
   Future<List<WeatherModel>> searchCities(String query) async {
-    final url =
-        'https://api.openweathermap.org/data/2.5/find?q=$query&type=like&sort=population&cnt=5&units=metric&lang=id&appid=$apiKey';
+    final url = Uri.parse("$_baseUrl/search.json?key=$_apiKey&q=$query");
+    final response = await http.get(url);
 
-    final res = await http.get(Uri.parse(url));
-    if (res.statusCode == 200) {
-      final data = json.decode(res.body);
-      final List list = data['list'] ?? [];
-      return list.map((e) => WeatherModel.fromJson(e)).toList();
-    } else {
-      throw Exception('Gagal mencari kota');
+    if (response.statusCode != 200) {
+      throw Exception("Gagal mencari kota");
     }
+
+    final List results = jsonDecode(response.body);
+    List<WeatherModel> weathers = [];
+
+    for (var r in results) {
+      weathers.add(await fetchCurrentWeather(r['name']));
+    }
+
+    return weathers;
   }
 
-  /// Ambil ramalan cuaca (hourly & daily)
   Future<ForecastModel> fetchForecast(double lat, double lon) async {
-    final url =
-        'https://api.openweathermap.org/data/2.5/onecall?lat=$lat&lon=$lon&exclude=minutely,alerts&units=metric&lang=id&appid=$apiKey';
+    final url = Uri.parse("$_baseUrl/forecast.json?key=$_apiKey&q=$lat,$lon&days=7&aqi=no&alerts=no");
+    final response = await http.get(url);
 
-    final res = await http.get(Uri.parse(url));
-    if (res.statusCode == 200) {
-      final data = json.decode(res.body);
-      return ForecastModel.fromJson(data);
-    } else {
-      throw Exception('Gagal ambil ramalan cuaca');
+    if (response.statusCode != 200) {
+      throw Exception("Gagal ambil ramalan cuaca");
     }
+
+    final data = jsonDecode(response.body);
+    return ForecastModel.fromJson(data);
   }
 
-  /// Minta izin dan ambil lokasi user
-  Future<Position> _determinePosition() async {
-    bool serviceEnabled;
-    LocationPermission permission;
+  WeatherModel _mapToWeatherModel(Map<String, dynamic> data) {
+    final current = data['current'];
+    final forecastDay = data['forecast']['forecastday'][0]['day'];
+    final astro = data['forecast']['forecastday'][0]['astro'];
+    final location = data['location'];
 
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      throw Exception('Layanan lokasi tidak aktif');
-    }
-
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        throw Exception('Izin lokasi ditolak');
-      }
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      throw Exception(
-          'Izin lokasi ditolak permanen, atur di pengaturan perangkat.');
-    }
-
-    return await Geolocator.getCurrentPosition();
-  }
-
-  Future<WeatherModel?> fetchCurrentWeatherByCoords(double latitude, double longitude) async {
-    return null;
+    return WeatherModel(
+      city: location['name'],
+      country: location['country'],
+      lat: location['lat'].toDouble(),
+      lon: location['lon'].toDouble(),
+      temperature: current['temp_c'].toDouble(),
+      high: forecastDay['maxtemp_c'].toDouble(),
+      low: forecastDay['mintemp_c'].toDouble(),
+      condition: current['condition']['text'],
+      description: current['condition']['text'],
+      icon: current['condition']['icon'],
+      isDay: current['is_day'] == 1,
+      windSpeed: current['wind_kph'].toDouble(),
+      windDirection: current['wind_dir'],
+      humidity: current['humidity'].toDouble(),
+      uvIndex: current['uv'].toDouble(),
+      precipitation: current['precip_mm'].toDouble(),
+      feelsLike: current['feelslike_c'].toDouble(),
+      visibility: current['vis_km'].toDouble(),
+      pressure: current['pressure_mb'].toDouble(),
+      sunrise: astro['sunrise'],
+      sunset: astro['sunset'],
+    );
   }
 }

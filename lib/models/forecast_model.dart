@@ -56,6 +56,7 @@ class DailyForecast {
     required this.condition,
   });
 
+  /// Ambil data dari JSON
   factory DailyForecast.fromJson(Map<String, dynamic> json) {
     return DailyForecast(
       date: DateTime.fromMillisecondsSinceEpoch(json['dt'] * 1000, isUtc: false),
@@ -65,7 +66,9 @@ class DailyForecast {
     );
   }
 
-  get temp => null;
+  /// Getter untuk rata-rata suhu harian
+  double get temp => (maxTemp + minTemp) / 2;
 
-  String? description() => null;
+  /// Getter untuk deskripsi
+  String get description => condition;
 }

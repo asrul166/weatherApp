@@ -13,21 +13,30 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  bool isDarkMode = true;
+  bool isDarkMode = false;
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Cuaca',
-      debugShowCheckedModeBanner: false,
-      theme: isDarkMode ? ThemeData.dark() : ThemeData.light(),
-      home: HomePage(
-        isDarkMode: isDarkMode,
-        onThemeToggle: () {
-          setState(() {
-            isDarkMode = !isDarkMode;
-          });
-        },
+      title: 'Aplikasi Cuaca',
+      theme: ThemeData.light(),
+      darkTheme: ThemeData.dark(),
+      themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      home: Scaffold(
+        appBar: AppBar(
+          title: const Text('Cuaca Sekarang'),
+          actions: [
+            Switch(
+              value: isDarkMode,
+              onChanged: (value) {
+                setState(() {
+                  isDarkMode = value;
+                });
+              },
+            )
+          ],
+        ),
+        body: const HomePage(),
       ),
     );
   }
