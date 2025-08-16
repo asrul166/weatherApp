@@ -31,11 +31,13 @@ class _WeatherDetailPageState extends State<WeatherDetailPage> {
     try {
       final result =
           await _api.fetchForecast(widget.weather.lat, widget.weather.lon);
+      if (!mounted) return;
       setState(() {
         forecast = result;
         isLoading = false;
       });
     } catch (_) {
+      if (!mounted) return;
       setState(() => isLoading = false);
     }
   }
@@ -43,6 +45,7 @@ class _WeatherDetailPageState extends State<WeatherDetailPage> {
   Future<void> _checkFavorite() async {
     final prefs = await SharedPreferences.getInstance();
     final favs = prefs.getStringList('favorites') ?? [];
+    if (!mounted) return;
     setState(() {
       isFavorite = favs.contains(widget.weather.city);
     });
@@ -54,11 +57,18 @@ class _WeatherDetailPageState extends State<WeatherDetailPage> {
 
     if (isFavorite) {
       favs.remove(widget.weather.city);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Dihapus dari favorit")),
+      );
     } else {
       favs.add(widget.weather.city);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Ditambahkan ke favorit")),
+      );
     }
 
     await prefs.setStringList('favorites', favs);
+    if (!mounted) return;
     setState(() => isFavorite = !isFavorite);
   }
 
@@ -88,7 +98,9 @@ class _WeatherDetailPageState extends State<WeatherDetailPage> {
                     Text(
                       "${widget.weather.temperature.toStringAsFixed(1)}°C",
                       style: const TextStyle(
-                          fontSize: 48, fontWeight: FontWeight.bold),
+                        fontSize: 48,
+                        fontWeight: FontWeight.bold,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
@@ -103,37 +115,43 @@ class _WeatherDetailPageState extends State<WeatherDetailPage> {
                       spacing: 16,
                       runSpacing: 16,
                       children: [
-                        _buildInfoTile(
-                            "Kelembapan", "${widget.weather.humidity}%"),
-                        _buildInfoTile(
-                            "Arah Angin", widget.weather.windDirection),
-                        _buildInfoTile(
-                            "Tekanan", "${widget.weather.pressure} hPa"),
-                        _buildInfoTile(
-                            "Kecepatan Angin",
-                            "${widget.weather.windSpeed.toStringAsFixed(1)} m/s"),
+                        InfoTile(title: "Kelembapan", value: "${widget.weather.humidity}%"),
+                        InfoTile(title: "Arah Angin", value: widget.weather.windDirection),
+                        InfoTile(title: "Tekanan", value: "${widget.weather.pressure} hPa"),
+                        InfoTile(title: "Kecepatan Angin", value: "${widget.weather.windSpeed.toStringAsFixed(1)} m/s"),
                       ],
                     ),
 
                     const SizedBox(height: 20),
                     const Text(
                       "Ramalan Harian",
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
-                    ...forecast!.daily.map((day) => ListTile(
-                          title: Text(_formatDay(day.date)),
-                          subtitle: Text(day.condition),
-                          trailing: Text(
-                              "${day.maxTemp.toStringAsFixed(0)}° / ${day.minTemp.toStringAsFixed(0)}°"),
-                        )),
+
+                    ...forecast!.daily.map(
+                      (day) => ListTile(
+                        title: Text(_formatDay(day.date)),
+                        subtitle: Text(day.condition),
+                        trailing: Text(
+                          "${day.maxTemp.toStringAsFixed(0)}° / ${day.minTemp.toStringAsFixed(0)}°",
+                        ),
+                      ),
+                    ),
                   ],
                 ),
     );
   }
+}
 
-  Widget _buildInfoTile(String title, String value) {
+class InfoTile extends StatelessWidget {
+  final String title;
+  final String value;
+
+  const InfoTile({super.key, required this.title, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       width: (MediaQuery.of(context).size.width - 48) / 2,
       padding: const EdgeInsets.all(12),

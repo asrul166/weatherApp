@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/weather_model.dart';
 import '../models/forecast_model.dart';
+import 'package:geolocator/geolocator.dart';
 
 class WeatherApiService {
   static const String _apiKey = "5f33107b99b28feb78327ac8a67f8b7d";
@@ -19,16 +20,24 @@ class WeatherApiService {
     return _mapToWeatherModel(data);
   }
 
-  Future<WeatherModel> fetchCurrentWeatherByCoords(double lat, double lon) async {
-    final url = Uri.parse("$_baseUrl/forecast.json?key=$_apiKey&q=$lat,$lon&days=1&aqi=no&alerts=no");
+
+  Future<WeatherModel> fetchCurrentWeatherByCoords() async {
+    final position = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
+
+    final url = Uri.parse(
+      "https://api.openweathermap.org/data/2.5/weather"
+      "?lat=${position.latitude}&lon=${position.longitude}"
+      "&appid=$_apiKey&units=metric&lang=id",
+    );
+
     final response = await http.get(url);
-
-    if (response.statusCode != 200) {
-      throw Exception("Gagal mengambil data cuaca berdasarkan koordinat");
+    if (response.statusCode == 200) {
+      return WeatherModel.fromJson(jsonDecode(response.body));
+    } else {
+      throw Exception("Gagal ambil data lokasi");
     }
-
-    final data = jsonDecode(response.body);
-    return _mapToWeatherModel(data);
   }
 
   Future<List<WeatherModel>> searchCities(String query) async {

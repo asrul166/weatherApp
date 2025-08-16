@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/weather_model.dart';
 import '../services/weather_api_service.dart';
 import '../widgets/weather_card.dart';
+import 'city_search_delegate.dart';
 import 'weather_detail_page.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final bool isDarkMode;
+  final ValueChanged<bool> onThemeToggle;
+
+  const HomePage({
+    super.key,
+    required this.isDarkMode,
+    required this.onThemeToggle,
+  });
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -15,123 +22,149 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final WeatherApiService _api = WeatherApiService();
-  bool isLoading = true;
-  List<WeatherModel> favoriteWeathers = [];
-  WeatherModel? myLocationWeather;
+  WeatherModel? currentWeather;
+  List<String> favorites = [];
+  bool isLoadingCurrent = true;
 
   @override
   void initState() {
     super.initState();
-    _loadWeather();
+    _loadFavorites();
+    _fetchCurrentLocationWeather();
   }
 
-  Future<void> _loadWeather() async {
-    setState(() => isLoading = true);
+  Future<void> _loadFavorites() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      favorites = prefs.getStringList('favorites') ?? [];
+    });
+  }
 
-    try {
-      Position? position;
+  Future<void> searchCity() async {
+    final result = await showSearch<String>(
+      context: context,
+      delegate: CitySearchDelegate(),
+    );
+
+    if (result != null && result.isNotEmpty) {
       try {
-        bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-        if (!serviceEnabled) throw Exception("Location service off");
-
-        LocationPermission permission = await Geolocator.checkPermission();
-        if (permission == LocationPermission.denied) {
-          permission = await Geolocator.requestPermission();
-          if (permission == LocationPermission.denied) {
-            throw Exception("Location denied");
-          }
-        }
-
-        position = await Geolocator.getCurrentPosition();
-      } catch (_) {
-        print("GPS gagal, pakai kota default Jakarta");
+        final weather = await _api.fetchCurrentWeather(result);
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => WeatherDetailPage(weather: weather),
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Gagal mencari kota"),
+            duration: Duration(seconds: 2),
+          ),
+        );
       }
-
-      if (position != null) {
-        myLocationWeather = await _api.fetchCurrentWeatherByCoords(
-            position.latitude, position.longitude);
-      } else {
-        myLocationWeather = await _api.fetchCurrentWeather("Jakarta");
-      }
-      final prefs = await SharedPreferences.getInstance();
-      final favCities = prefs.getStringList('favorites') ?? [];
-      favoriteWeathers = [];
-      for (String city in favCities) {
-        try {
-          final weather = await _api.fetchCurrentWeather(city);
-          favoriteWeathers.add(weather);
-        } catch (e) {
-          print("Gagal ambil cuaca $city: $e");
-        }
-      }
-    } catch (e) {
-      print("Error load weather: $e");
     }
+  }
 
-    setState(() => isLoading = false);
+  Future<void> _fetchCurrentLocationWeather() async {
+    try {
+      final weather = await _api.fetchCurrentWeatherByCoords();
+      if (!mounted) return;
+      setState(() {
+        currentWeather = weather;
+        isLoadingCurrent = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        isLoadingCurrent = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Cuaca Sekarang"),
+        title: const Text('Cuaca Sekarang'),
         actions: [
+          Switch(
+            value: widget.isDarkMode,
+            onChanged: widget.onThemeToggle,
+          ),
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: searchCity,
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loadWeather,
-          )
+            onPressed: _fetchCurrentLocationWeather,
+          ),
         ],
       ),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                if (myLocationWeather != null) ...[
-                  const Text("Lokasi Saya",
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  WeatherCard(
-                    weather: myLocationWeather!,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => WeatherDetailPage(
-                            weather: myLocationWeather!,
-                          ),
-                        ),
-                      ).then((_) => _loadWeather());
-                    },
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          if (isLoadingCurrent)
+            const Center(child: CircularProgressIndicator())
+          else if (currentWeather != null)
+            WeatherCard(
+              weather: currentWeather!,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => WeatherDetailPage(weather: currentWeather!),
                   ),
-                  const SizedBox(height: 16),
-                ],
-                const Text("Kota Favorit",
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                if (favoriteWeathers.isEmpty)
-                  const Text("Belum ada kota favorit"),
-                ...favoriteWeathers.map((weather) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: WeatherCard(
-                        weather: weather,
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => WeatherDetailPage(
-                                weather: weather,
-                              ),
-                            ),
-                          ).then((_) => _loadWeather());
-                        },
-                      ),
-                    )),
-              ],
+                );
+              },
+            )
+          else
+            const Text("Gagal memuat cuaca lokasi saat ini"),
+
+          const SizedBox(height: 20),
+          const Text(
+            "Kota Favorit",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          if (favorites.isEmpty)
+            const Text("Belum ada kota favorit")
+          else
+            Column(
+              children: favorites.map((city) {
+                return FutureBuilder<WeatherModel>(
+                  future: _api.fetchCurrentWeather(city),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Padding(
+                        padding: EdgeInsets.all(8),
+                        child: LinearProgressIndicator(),
+                      );
+                    } else if (snapshot.hasError) {
+                      return ListTile(title: Text("Gagal memuat $city"));
+                    } else if (!snapshot.hasData) {
+                      return ListTile(title: Text("Data kosong untuk $city"));
+                    }
+                    return WeatherCard(
+                      weather: snapshot.data!,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                WeatherDetailPage(weather: snapshot.data!),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                );
+              }).toList(),
             ),
+        ],
+      ),
     );
   }
 }
